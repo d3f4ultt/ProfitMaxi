@@ -250,10 +250,11 @@ MIT License - see [LICENSE](LICENSE)
 
 - Built on [Anchor](https://www.anchor-lang.com/)
 - Inspired by TradFi POV algorithms
-- Community feedback from [Mezzanine DAO](https://mezzanine.dao)
+- Community feedback from [Mezzanine DAO](https://)
 
 ---
 
-**Author:** Justin Liverman (d3f4ult)  
-**Organization:** Mezzanine DAO  
-**Contact:** d3f4ult@mezzanine.dao
+**Author:** Justin Liverman 
+**Twitter:** @_d3f4ult
+**Organization:** @MezzanineDAO  
+**Contact:** d3f4ult@apolloalgo.ai
