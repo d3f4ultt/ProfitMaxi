@@ -1,0 +1,57 @@
+{
+  "name": "profitmaxi-sol",
+  "version": "0.1.0",
+  "description": "ProfitMaxi: Volume-Sensitive Limit Orders for AMM Liquidity Pools",
+  "private": true,
+  "workspaces": [
+    "sdk",
+    "keeper"
+  ],
+  "scripts": {
+    "build": "anchor build && yarn workspaces run build",
+    "test": "anchor test",
+    "test:unit": "cargo test",
+    "test:sdk": "yarn workspace @profitmaxi/sdk test",
+    "lint": "yarn workspaces run lint && cargo fmt --check && cargo clippy",
+    "clean": "anchor clean && yarn workspaces run clean",
+    "deploy:devnet": "anchor deploy --provider.cluster devnet",
+    "deploy:mainnet": "anchor deploy --provider.cluster mainnet",
+    "idl:generate": "anchor build && cp target/idl/profitmaxi.json sdk/src/idl.json",
+    "docs": "typedoc --out docs/api sdk/src"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mezzanine-dao/profitmaxi-sol.git"
+  },
+  "keywords": [
+    "solana",
+    "defi",
+    "amm",
+    "trading",
+    "limit-order",
+    "volume-sensitive",
+    "anchor"
+  ],
+  "author": "Justin Liverman (d3f4ult) <d3f4ult@mezzanine.dao>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mezzanine-dao/profitmaxi-sol/issues"
+  },
+  "homepage": "https://github.com/mezzanine-dao/profitmaxi-sol#readme",
+  "devDependencies": {
+    "@coral-xyz/anchor": "^0.29.0",
+    "@solana/web3.js": "^1.87.0",
+    "@types/bn.js": "^5.1.5",
+    "@types/chai": "^4.3.11",
+    "@types/mocha": "^10.0.6",
+    "bn.js": "^5.2.1",
+    "chai": "^4.3.10",
+    "mocha": "^10.2.0",
+    "ts-mocha": "^10.0.0",
+    "typescript": "^5.3.0",
+    "typedoc": "^0.25.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "config": {
+    "initial_token_reserve": 1000000000,
+    "initial_quote_reserve": 500,
+    "order_size": 50,
+    "order_to_liquidity_pct": 5.0,
+    "buy_arrival_rate": 5,
+    "mean_buy_size": 0.5,
+    "num_simulations": 500
+  },
+  "results_by_delta_ratio": {
+    "0.3": {
+      "config": {
+        "delta_ratio": 0.3,
+        "order_size": 50,
+        "pool_liquidity": 1000,
+        "order_to_liquidity_ratio": 0.05,
+        "num_simulations": 500
+      },
+      "price_impact": {
+        "mean_pct": 53.35607861623444,
+        "std_pct": 1.035411525754036,
+        "median_pct": 53.08935584724386,
+        "min_pct": 52.131124773682814,
+        "max_pct": 58.56782306462704,
+        "ci_95": [
+          53.26501068641687,
+          53.44714654605201
+        ]
+      },
+      "fill_time": {
+        "mean": 49.052,
+        "std": 4.217261670800141,
+        "median": 49.0,
+        "min": "34",
+        "max": "64"
+      },
+      "fill_rate": {
+        "mean_pct": 100.0,
+        "fully_filled_pct": 100.0
+      }
+    },
+    "0.5": {
+      "config": {
+        "delta_ratio": 0.5,
+        "order_size": 50,
+        "pool_liquidity": 1000,
+        "order_to_liquidity_ratio": 0.05,
+        "num_simulations": 500
+      },
+      "price_impact": {
+        "mean_pct": 22.071769973513575,
+        "std_pct": 0.8267926084584604,
+        "median_pct": 21.86827289947961,
+        "min_pct": 21.02572830518567,
+        "max_pct": 25.59343643289051,
+        "ci_95": [
+          21.999050779871272,
+          22.14448916715588
+        ]
+      },
+      "fill_time": {
+        "mean": 29.866,
+        "std": 3.340066466404523,
+        "median": 30.0,
+        "min": "20",
+        "max": "41"
+      },
+      "fill_rate": {
+        "mean_pct": 100.0,
+        "fully_filled_pct": 100.0
+      }
+    },
+    "0.8": {
+      "config": {
+        "delta_ratio": 0.8,
+        "order_size": 50,
+        "pool_liquidity": 1000,
+        "order_to_liquidity_ratio": 0.05,
+        "num_simulations": 500
+      },
+      "price_impact": {
+        "mean_pct": 6.021827310071377,
+        "std_pct": 0.7045739949397892,
+        "median_pct": 5.84419942208862,
+        "min_pct": 5.105492175088442,
+        "max_pct": 9.347551694832617,
+        "ci_95": [
+          5.959857654985943,
+          6.08379696515681
+        ]
+      },
+      "fill_time": {
+        "mean": 18.666,
+        "std": 2.6180993105686423,
+        "median": 19.0,
+        "min": "11",
+        "max": "29"
+      },
+      "fill_rate": {
+        "mean_pct": 100.0,
+        "fully_filled_pct": 100.0
+      }
+    },
+    "1.0": {
+      "config": {
+        "delta_ratio": 1.0,
+        "order_size": 50,
+        "pool_liquidity": 1000,
+        "order_to_liquidity_ratio": 0.05,
+        "num_simulations": 500
+      },
+      "price_impact": {
+        "mean_pct": 1.0233795037645619,
+        "std_pct": 0.8036758171303606,
+        "median_pct": 0.831280804083691,
+        "min_pct": 0.036569497831552986,
+        "max_pct": 4.807598617457237,
+        "ci_95": [
+          0.952693509751501,
+          1.0940654977776227
+        ]
+      },
+      "fill_time": {
+        "mean": 15.19,
+        "std": 2.3937209528263734,
+        "median": 15.0,
+        "min": "7",
+        "max": "21"
+      },
+      "fill_rate": {
+        "mean_pct": 100.0,
+        "fully_filled_pct": 100.0
+      }
+    }
+  }
+}

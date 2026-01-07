@@ -1,0 +1,29 @@
+[package]
+name = "profitmaxi"
+version = "0.1.0"
+description = "ProfitMaxi: Volume-Sensitive Limit Orders for AMM Liquidity Pools"
+authors = ["Justin Liverman (d3f4ult) <d3f4ult@mezzanine.dao>"]
+repository = "https://github.com/mezzanine-dao/profitmaxi-sol"
+license = "MIT"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "profitmaxi"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = { version = "0.29.0", features = ["init-if-needed"] }
+anchor-spl = { version = "0.29.0", features = ["token"] }
+solana-program = "1.17"
+
+[dev-dependencies]
+solana-program-test = "1.17"
+solana-sdk = "1.17"
+tokio = { version = "1.0", features = ["full"] }
