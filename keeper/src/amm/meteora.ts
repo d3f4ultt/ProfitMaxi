@@ -340,32 +340,62 @@ export class MeteoraAdapter extends BaseAmmAdapter {
       // Parse balance changes
       const preBalances = tx.meta.preTokenBalances || [];
       const postBalances = tx.meta.postTokenBalances || [];
+      const WSOL_MINT = 'So11111111111111111111111111111111111111112';
 
+      let buyAmount: BN | null = null;
+      let poolAddress: PublicKey | null = null;
+
+      // Step 1: detect the quote side — wSOL vault increased (user deposited SOL)
       for (const pre of preBalances) {
         const post = postBalances.find(p => p.accountIndex === pre.accountIndex);
-        if (!post) continue;
+        if (!post || pre.mint !== WSOL_MINT) continue;
 
-        const preAmount = new BN(pre.uiTokenAmount.amount);
-        const postAmount = new BN(post.uiTokenAmount.amount);
+        const preAmt = new BN(pre.uiTokenAmount.amount);
+        const postAmt = new BN(post.uiTokenAmount.amount);
 
-        // Detect buy: Y reserve (quote) increased
-        if (postAmount.gt(preAmount) &&
-            pre.mint === 'So11111111111111111111111111111111111111112') {
-          const buyAmount = postAmount.sub(preAmount);
-
-          return {
-            pool: new PublicKey(pre.owner || ''),
-            protocol: AmmProtocol.METEORA_DLMM,
-            tokenMint: new PublicKey(pre.mint),
-            buyAmount,
-            signature,
-            slot: tx.slot,
-            timestamp: tx.blockTime || 0,
-          };
+        if (postAmt.gt(preAmt)) {
+          buyAmount = postAmt.sub(preAmt);
+          // The token account owner is the pool reserve, not the pool PDA itself.
+          // Extract pool address from the account keys using the Meteora program.
+          const accountKeys = tx.transaction.message.accountKeys.map((k: any) =>
+            typeof k === 'string' ? k : k.pubkey.toBase58()
+          );
+          // The pool (LbPair) is typically the first non-signer writable Meteora account
+          for (const keyStr of accountKeys) {
+            try {
+              const info = await this.connection.getAccountInfo(new PublicKey(keyStr));
+              if (info && info.owner.toBase58() === this.programId.toBase58()) {
+                poolAddress = new PublicKey(keyStr);
+                break;
+              }
+            } catch {
+              // skip unparseable keys
+            }
+          }
+          break;
         }
       }
 
-      return null;
+      if (!buyAmount) return null;
+
+      // Step 2: find the base token that DECREASED in the pool (user bought it)
+      const soldToken = postBalances.find(post => {
+        const pre = preBalances.find(p => p.accountIndex === post.accountIndex);
+        if (!pre || post.mint === WSOL_MINT) return false;
+        return new BN(pre.uiTokenAmount.amount).gt(new BN(post.uiTokenAmount.amount));
+      });
+
+      if (!soldToken || !poolAddress) return null;
+
+      return {
+        pool: poolAddress,
+        protocol: AmmProtocol.METEORA_DLMM,
+        tokenMint: new PublicKey(soldToken.mint),
+        buyAmount,
+        signature,
+        slot: tx.slot,
+        timestamp: tx.blockTime || 0,
+      };
     } catch {
       return null;
     }

@@ -84,6 +84,8 @@ export class PoolAggregator {
     volume: number;
     fee: number;
   };
+  /** Tracks signatures already processed to prevent duplicate event callbacks. */
+  private processedSignatures: Set<string> = new Set();
 
   constructor(config: PoolAggregatorConfig) {
     this.connection = config.connection;
@@ -413,10 +415,20 @@ export class PoolAggregator {
           );
 
           for (const sig of signatures) {
+            // Skip signatures we have already processed to prevent duplicate callbacks
+            if (this.processedSignatures.has(sig.signature)) continue;
+            this.processedSignatures.add(sig.signature);
+
             const event = await adapter.parseBuyEvent(sig.signature);
             if (event && event.slot === context.slot) {
               callback(event);
             }
+          }
+
+          // Periodically prune the deduplication set to prevent unbounded growth
+          if (this.processedSignatures.size > 10_000) {
+            const oldest = Array.from(this.processedSignatures).slice(0, 5_000);
+            oldest.forEach(s => this.processedSignatures.delete(s));
           }
         },
         'confirmed'

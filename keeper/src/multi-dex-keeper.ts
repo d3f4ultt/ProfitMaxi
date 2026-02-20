@@ -19,6 +19,9 @@ import BN from 'bn.js';
 import { createLogger, format, transports } from 'winston';
 import * as dotenv from 'dotenv';
 
+// Import the AMM module from the shared SDK rather than the local duplicate.
+// The keeper's keeper/src/amm/ directory is kept only for backward compatibility;
+// new code should import from '@profitmaxi/sdk'.
 import {
   PoolAggregator,
   createPoolAggregator,
@@ -26,7 +29,7 @@ import {
   AmmProtocol,
   PoolInfo,
   RankedPool,
-} from './amm';
+} from '@profitmaxi/sdk';
 
 dotenv.config();
 

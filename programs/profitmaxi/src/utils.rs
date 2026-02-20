@@ -94,8 +94,9 @@ pub fn calculate_amm_output(
     }
     
     // Apply fee: amount_in_with_fee = amount_in * (10000 - fee_bps) / 10000
+    // Use explicit u64 arithmetic to avoid silent truncation if BPS_DENOMINATOR ever changes.
     let amount_in_with_fee = (amount_in as u128)
-        .checked_mul((BPS_DENOMINATOR as u16 - fee_bps) as u128)
+        .checked_mul(BPS_DENOMINATOR.saturating_sub(fee_bps as u64) as u128)
         .ok_or(ProfitMaxiError::MathOverflow)?;
     
     // dy = y * dx / (x + dx)

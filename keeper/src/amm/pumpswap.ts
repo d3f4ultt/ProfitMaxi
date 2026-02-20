@@ -62,6 +62,9 @@ enum PumpSwapInstruction {
 export class PumpSwapAdapter extends BaseAmmAdapter {
   readonly protocol = AmmProtocol.PUMPSWAP;
 
+  /** Pool addresses discovered/cached by findPools() or findPoolFromTx(). */
+  private knownPools: Map<string, PublicKey> = new Map();
+
   constructor(connection: Connection) {
     super({
       connection,
@@ -89,6 +92,8 @@ export class PumpSwapAdapter extends BaseAmmAdapter {
     const pool = await this.getPool(poolPda);
     if (pool) {
       pools.push(pool);
+      // Cache the canonical PDA so parseBuyEvent can resolve it from tx accounts
+      this.knownPools.set(poolPda.toBase58(), poolPda);
     }
 
     // Also search by program accounts for any pools containing this token
@@ -99,11 +104,12 @@ export class PumpSwapAdapter extends BaseAmmAdapter {
     for (const { pubkey, data } of accounts) {
       // Skip if we already have this pool
       if (pools.find(p => p.address.equals(pubkey))) continue;
-      
+
       const parsedPool = await this.parsePool(pubkey, data);
-      if (parsedPool && 
+      if (parsedPool &&
           (parsedPool.baseMint.equals(tokenMint) || parsedPool.quoteMint.equals(tokenMint))) {
         pools.push(parsedPool);
+        this.knownPools.set(pubkey.toBase58(), pubkey);
       }
     }
 
@@ -346,14 +352,21 @@ export class PumpSwapAdapter extends BaseAmmAdapter {
   }
 
   /**
-   * Extract pool address from transaction
+   * Extract the pool address from a transaction by matching writable accounts
+   * against the set of known PumpSwap pool addresses (populated by findPools).
+   *
+   * The pool is always a writable, non-signer account owned by PUMPSWAP_PROGRAM_ID.
+   * We match against `knownPools` which is populated via findPools() calls.
    */
   private findPoolFromTx(tx: any): PublicKey | null {
-    // The pool account is typically one of the writable accounts
-    const accountKeys = tx.transaction.message.accountKeys;
-    for (const key of accountKeys) {
-      const pubkey = typeof key === 'string' ? new PublicKey(key) : key.pubkey;
-      // Check if this looks like a PumpSwap pool (would need to verify)
+    const accountKeys: string[] = tx.transaction.message.accountKeys.map((k: any) =>
+      typeof k === 'string' ? k : k.pubkey.toBase58()
+    );
+
+    for (const keyStr of accountKeys) {
+      if (this.knownPools.has(keyStr)) {
+        return this.knownPools.get(keyStr)!;
+      }
     }
     return null;
   }

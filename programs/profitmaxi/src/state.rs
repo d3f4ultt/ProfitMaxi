@@ -207,6 +207,56 @@ impl OrderEscrow {
         1;   // bump
 }
 
+#[cfg(test)]
+mod size_tests {
+    use super::*;
+
+    #[test]
+    fn order_len_correct() {
+        // Manually sum field sizes and compare to Order::LEN.
+        // If this fails, update Order::LEN to match the struct definition.
+        let expected: usize =
+            8 +   // discriminator
+            32 +  // owner
+            32 +  // token_mint
+            32 +  // quote_mint
+            32 +  // amm_pool
+            32 +  // amm_program
+            8 +   // total_size
+            8 +   // remaining
+            8 +   // escrowed_tokens
+            2 +   // delta_ratio_bps
+            8 +   // min_threshold
+            8 +   // created_at
+            8 +   // last_executed_at
+            4 +   // total_fills
+            8 +   // total_quote_received
+            8 +   // avg_execution_price
+            1 +   // status
+            8 +   // order_id
+            1 +   // bump
+            32;   // _reserved
+        assert_eq!(Order::LEN, expected, "Order::LEN mismatch — update the constant if the struct changed");
+    }
+
+    #[test]
+    fn config_len_correct() {
+        let expected: usize =
+            8 +   // discriminator
+            32 +  // admin
+            2 +   // protocol_fee_bps
+            2 +   // keeper_fee_bps
+            8 +   // total_fees_collected
+            8 +   // total_orders
+            8 +   // total_shards_executed
+            8 +   // total_volume
+            1 +   // is_paused
+            1 +   // bump
+            64;   // reserved
+        assert_eq!(Config::LEN, expected, "Config::LEN mismatch");
+    }
+}
+
 /// Supported AMM types for execution routing
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AmmType {

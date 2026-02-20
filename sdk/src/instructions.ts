@@ -14,21 +14,31 @@ import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
+import { createHash } from 'crypto';
 import BN from 'bn.js';
 import { PROFITMAXI_PROGRAM_ID } from './constants';
 
-// Instruction discriminators (first 8 bytes of sha256 hash of instruction name)
+/**
+ * Derive an Anchor instruction discriminator.
+ * Anchor uses sha256("global:<snake_case_name>")[0..8].
+ */
+function discriminator(name: string): Buffer {
+  return createHash('sha256').update(`global:${name}`).digest().slice(0, 8);
+}
+
+// Instruction discriminators derived programmatically from sha256("global:<name>").
+// This matches Anchor's canonical discriminator generation — no hardcoded magic bytes.
 export const INSTRUCTION_DISCRIMINATORS = {
-  initialize: Buffer.from([175, 175, 109, 31, 13, 152, 155, 237]),
-  createOrder: Buffer.from([141, 54, 37, 207, 228, 55, 148, 117]),
-  executeShard: Buffer.from([23, 169, 41, 195, 238, 117, 83, 45]),
-  cancelOrder: Buffer.from([95, 129, 237, 240, 8, 49, 223, 132]),
-  updateOrder: Buffer.from([211, 183, 35, 99, 175, 201, 54, 78]),
-  pauseOrder: Buffer.from([56, 147, 54, 119, 204, 238, 89, 23]),
-  resumeOrder: Buffer.from([187, 243, 56, 89, 167, 201, 78, 145]),
-  updateConfig: Buffer.from([29, 158, 252, 191, 10, 83, 219, 99]),
-  registerKeeper: Buffer.from([253, 101, 38, 241, 89, 3, 167, 45]),
-  withdrawFees: Buffer.from([198, 212, 171, 109, 144, 215, 174, 89]),
+  initialize:     discriminator('initialize'),
+  createOrder:    discriminator('create_order'),
+  executeShard:   discriminator('execute_shard'),
+  cancelOrder:    discriminator('cancel_order'),
+  updateOrder:    discriminator('update_order'),
+  pauseOrder:     discriminator('pause_order'),
+  resumeOrder:    discriminator('resume_order'),
+  updateConfig:   discriminator('update_config'),
+  registerKeeper: discriminator('register_keeper'),
+  withdrawFees:   discriminator('withdraw_fees'),
 };
 
 /**

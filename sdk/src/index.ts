@@ -13,3 +13,6 @@ export * from './types';
 export * from './constants';
 export * from './utils';
 export * from './instructions';
+// Export the AMM module so the keeper (and other consumers) can import from
+// '@profitmaxi/sdk' instead of maintaining their own duplicate copy.
+export * from './amm';

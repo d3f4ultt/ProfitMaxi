@@ -5,6 +5,7 @@
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use std::str::FromStr;
 
 use crate::state::{Config, Order, OrderStatus, Keeper};
 use crate::errors::ProfitMaxiError;
@@ -153,9 +154,7 @@ pub fn handler(
     ];
     let signer_seeds = &[&seeds[..]];
 
-    // Execute AMM swap via CPI
-    // This is a simplified version - real implementation would have
-    // AMM-specific CPI calls (Raydium, Orca, etc.)
+    // Execute AMM swap via CPI — dispatches based on registered AMM program
     let quote_received = execute_amm_swap_cpi(
         &ctx,
         tokens_to_sell,
@@ -177,6 +176,27 @@ pub fn handler(
         .ok_or(ProfitMaxiError::MathUnderflow)?
         .checked_sub(protocol_fee)
         .ok_or(ProfitMaxiError::MathUnderflow)?;
+
+    // Transfer keeper fee from fee_vault to keeper.
+    // The AMM CPI sends quote SOL into fee_vault; we then distribute from it.
+    **ctx.accounts.fee_vault.try_borrow_mut_lamports()? = ctx.accounts.fee_vault
+        .lamports()
+        .checked_sub(keeper_fee)
+        .ok_or(ProfitMaxiError::MathUnderflow)?;
+    **ctx.accounts.keeper.try_borrow_mut_lamports()? = ctx.accounts.keeper
+        .lamports()
+        .checked_add(keeper_fee)
+        .ok_or(ProfitMaxiError::MathOverflow)?;
+
+    // Transfer net quote from fee_vault to owner (protocol_fee remains in fee_vault).
+    **ctx.accounts.fee_vault.try_borrow_mut_lamports()? = ctx.accounts.fee_vault
+        .lamports()
+        .checked_sub(net_quote)
+        .ok_or(ProfitMaxiError::MathUnderflow)?;
+    **ctx.accounts.owner.try_borrow_mut_lamports()? = ctx.accounts.owner
+        .lamports()
+        .checked_add(net_quote)
+        .ok_or(ProfitMaxiError::MathOverflow)?;
 
     // Calculate execution price (scaled by 1e9)
     let execution_price = if tokens_to_sell > 0 {
@@ -224,6 +244,11 @@ pub fn handler(
     let is_filled = order.remaining == 0;
     if is_filled {
         order.status = OrderStatus::Filled;
+    }
+
+    // Reclaim rent for fully-filled orders — transfer lamports back to owner
+    if is_filled {
+        ctx.accounts.order.close(ctx.accounts.owner.to_account_info())?;
     }
 
     // Update config stats
@@ -294,33 +319,64 @@ pub fn handler(
     Ok(())
 }
 
-/// Execute AMM swap via CPI
-/// 
-/// This is a placeholder - real implementation would have
-/// specific CPI calls for each supported AMM.
+/// Execute AMM swap via CPI, dispatching on the order's registered AMM program.
+///
+/// Each supported AMM has its own CPI layout and required remaining_accounts.
+/// Callers must pass the correct AMM-specific accounts in ctx.remaining_accounts.
 fn execute_amm_swap_cpi(
     ctx: &Context<ExecuteShard>,
     tokens_to_sell: u64,
     min_amount_out: u64,
     signer_seeds: &[&[&[u8]]],
 ) -> Result<u64> {
-    // In production, this would:
-    // 1. Determine AMM type from order.amm_program
-    // 2. Build appropriate CPI call (Raydium, Orca, etc.)
-    // 3. Execute swap and return quote received
-    
-    // For now, simulate a successful swap
-    // Real implementation would use remaining_accounts for AMM-specific accounts
-    
-    msg!("Executing AMM swap CPI...");
+    let amm = ctx.accounts.order.amm_program;
+
+    let raydium_v4 = Pubkey::from_str(RAYDIUM_AMM_V4)
+        .map_err(|_| error!(ProfitMaxiError::UnsupportedAmm))?;
+    let raydium_clmm = Pubkey::from_str(RAYDIUM_CLMM)
+        .map_err(|_| error!(ProfitMaxiError::UnsupportedAmm))?;
+    let orca = Pubkey::from_str(ORCA_WHIRLPOOL)
+        .map_err(|_| error!(ProfitMaxiError::UnsupportedAmm))?;
+    let meteora = Pubkey::from_str(METEORA_DLMM)
+        .map_err(|_| error!(ProfitMaxiError::UnsupportedAmm))?;
+    // PumpSwap program ID
+    let pumpswap = "PSwapMdSai8tjrEXcxFeQth87xC4rRsa4VA5mhGhXkP"
+        .parse::<Pubkey>()
+        .map_err(|_| error!(ProfitMaxiError::UnsupportedAmm))?;
+
+    msg!("Executing AMM swap CPI for program: {}", amm);
     msg!("Tokens to sell: {}", tokens_to_sell);
     msg!("Min amount out: {}", min_amount_out);
-    
-    // Transfer tokens from escrow to AMM (placeholder)
-    // In real implementation, this is handled by AMM CPI
-    
-    // Simulated output (in production, this comes from AMM)
-    let quote_received = tokens_to_sell; // 1:1 for testing
-    
-    Ok(quote_received)
+
+    if amm == raydium_v4 {
+        // TODO: implement Raydium V4 CPI using remaining_accounts
+        // Required accounts (in order): token_program, amm, amm_authority,
+        // amm_open_orders, amm_target_orders, pool_coin_token_account,
+        // pool_pc_token_account, serum_program, serum_market, serum_bids,
+        // serum_asks, serum_event_queue, serum_coin_vault, serum_pc_vault,
+        // serum_vault_signer, user_source_token_account, user_dest_token_account, user_owner
+        return err!(ProfitMaxiError::UnsupportedAmm);
+    }
+
+    if amm == raydium_clmm {
+        // TODO: implement Raydium CLMM CPI
+        return err!(ProfitMaxiError::UnsupportedAmm);
+    }
+
+    if amm == orca {
+        // TODO: implement Orca Whirlpool CPI
+        return err!(ProfitMaxiError::UnsupportedAmm);
+    }
+
+    if amm == meteora {
+        // TODO: implement Meteora DLMM CPI
+        return err!(ProfitMaxiError::UnsupportedAmm);
+    }
+
+    if amm == pumpswap {
+        // TODO: implement PumpSwap CPI
+        return err!(ProfitMaxiError::UnsupportedAmm);
+    }
+
+    err!(ProfitMaxiError::UnsupportedAmm)
 }

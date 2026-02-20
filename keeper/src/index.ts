@@ -15,6 +15,76 @@ import {
 } from '@solana/web3.js';
 import { ProfitMaxiClient, OrderAccount, OrderStatus } from '@profitmaxi/sdk';
 import BN from 'bn.js';
+
+// ---------------------------------------------------------------------------
+// Manual Order deserializer matching programs/profitmaxi/src/state.rs Order
+// ---------------------------------------------------------------------------
+
+/** Raw status byte values from the OrderStatus enum in state.rs */
+const ORDER_STATUS_ACTIVE    = 0;
+const ORDER_STATUS_PAUSED    = 1;
+const ORDER_STATUS_FILLED    = 2;
+const ORDER_STATUS_CANCELLED = 3;
+
+function deserializeOrder(pubkey: PublicKey, data: Buffer): OrderAccount | null {
+  try {
+    // Account must be at least Order::LEN bytes (280)
+    if (data.length < 280) return null;
+
+    let offset = 8; // skip 8-byte Anchor discriminator
+
+    const owner        = new PublicKey(data.slice(offset, offset += 32));
+    const tokenMint    = new PublicKey(data.slice(offset, offset += 32));
+    const quoteMint    = new PublicKey(data.slice(offset, offset += 32));
+    const ammPool      = new PublicKey(data.slice(offset, offset += 32));
+    const ammProgram   = new PublicKey(data.slice(offset, offset += 32));
+    const totalSize    = new BN(data.slice(offset, offset += 8),  'le');
+    const remaining    = new BN(data.slice(offset, offset += 8),  'le');
+    const escrowedTokens = new BN(data.slice(offset, offset += 8), 'le');
+    const deltaRatioBps  = data.readUInt16LE(offset); offset += 2;
+    const minThreshold   = new BN(data.slice(offset, offset += 8),  'le');
+    const createdAt      = new BN(data.slice(offset, offset += 8),  'le');
+    const lastExecutedAt = new BN(data.slice(offset, offset += 8),  'le');
+    const totalFills     = data.readUInt32LE(offset); offset += 4;
+    const totalQuoteReceived  = new BN(data.slice(offset, offset += 8), 'le');
+    const avgExecutionPrice   = new BN(data.slice(offset, offset += 8), 'le');
+    const statusByte          = data.readUInt8(offset); offset += 1;
+    const orderId             = new BN(data.slice(offset, offset += 8), 'le');
+    // bump (1 byte) + _reserved (32 bytes) omitted — not needed at runtime
+
+    let status: OrderStatus;
+    switch (statusByte) {
+      case ORDER_STATUS_ACTIVE:    status = OrderStatus.Active;    break;
+      case ORDER_STATUS_PAUSED:    status = OrderStatus.Paused;    break;
+      case ORDER_STATUS_FILLED:    status = OrderStatus.Filled;    break;
+      case ORDER_STATUS_CANCELLED: status = OrderStatus.Cancelled; break;
+      default: return null; // unknown status — skip account
+    }
+
+    return {
+      publicKey: pubkey,
+      owner,
+      tokenMint,
+      quoteMint,
+      ammPool,
+      ammProgram,
+      totalSize,
+      remaining,
+      escrowedTokens,
+      deltaRatioBps,
+      minThreshold,
+      createdAt,
+      lastExecutedAt,
+      totalFills,
+      totalQuoteReceived,
+      avgExecutionPrice,
+      status,
+      orderId,
+    } as unknown as OrderAccount;
+  } catch {
+    return null;
+  }
+}
 import { createLogger, format, transports } from 'winston';
 import * as dotenv from 'dotenv';
 
@@ -157,28 +227,28 @@ export class KeeperService {
   }
 
   /**
-   * Load all active orders
+   * Load all active orders by deserializing on-chain program accounts.
    */
   private async loadActiveOrders(): Promise<void> {
     logger.info('Loading active orders...');
-    
-    // Fetch all active orders from program accounts
+
     const accounts = await this.connection.getProgramAccounts(
       this.client.programId,
       {
         filters: [
-          { dataSize: 280 }, // Order account size
+          { dataSize: 280 }, // Order::LEN
         ],
       }
     );
 
     for (const { pubkey, account } of accounts) {
-      // Deserialize and filter active orders
-      // const order = deserialize(account.data);
-      // if (order.status === OrderStatus.Active) {
-      //   this.activeOrders.set(pubkey.toBase58(), order);
-      //   this.monitoredPools.add(order.ammPool.toBase58());
-      // }
+      const order = deserializeOrder(pubkey, account.data as Buffer);
+      if (!order) continue;
+
+      if (order.status === OrderStatus.Active) {
+        this.activeOrders.set(pubkey.toBase58(), order);
+        this.monitoredPools.add((order as any).ammPool.toBase58());
+      }
     }
 
     logger.info(`Loaded ${this.activeOrders.size} active orders`);

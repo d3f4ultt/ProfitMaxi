@@ -57,6 +57,18 @@ pub struct CreateOrder<'info> {
     /// CHECK: Validated against known AMM program IDs
     pub amm_program: AccountInfo<'info>,
 
+    /// Pool's token vault — used to read current reserves for escrow calculation
+    #[account(
+        constraint = pool_token_vault.mint == token_mint.key() @ ProfitMaxiError::TokenMintMismatch,
+    )]
+    pub pool_token_vault: Account<'info, TokenAccount>,
+
+    /// Pool's quote vault — used to read current reserves for escrow calculation
+    #[account(
+        constraint = pool_quote_vault.mint == quote_mint.key() @ ProfitMaxiError::QuoteMintMismatch,
+    )]
+    pub pool_quote_vault: Account<'info, TokenAccount>,
+
     /// Owner's token account
     #[account(
         mut,
@@ -101,13 +113,24 @@ pub fn handler(
         ProfitMaxiError::ProtocolPaused
     );
 
-    // Calculate tokens to escrow based on current pool price
-    // For now, we'll use the tokens available in owner's account
-    // In production, this would query the AMM for current price
-    let tokens_to_escrow = ctx.accounts.owner_token_account.amount;
-    
+    // Calculate tokens to escrow based on total_size_lamports at current pool price.
+    // This prevents taking the user's entire balance when the order is for a
+    // specific quote amount (e.g. 1 SOL order should NOT escrow 1M tokens).
+    let pool_token_reserve = ctx.accounts.pool_token_vault.amount;
+    let pool_quote_reserve = ctx.accounts.pool_quote_vault.amount;
+
+    let tokens_to_escrow = calculate_tokens_for_quote(
+        total_size_lamports,
+        pool_token_reserve,
+        pool_quote_reserve,
+    )?;
+
     require!(
         tokens_to_escrow > 0,
+        ProfitMaxiError::InsufficientBalance
+    );
+    require!(
+        tokens_to_escrow <= ctx.accounts.owner_token_account.amount,
         ProfitMaxiError::InsufficientBalance
     );
 

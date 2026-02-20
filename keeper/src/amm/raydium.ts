@@ -273,41 +273,67 @@ export class RaydiumV4Adapter extends BaseAmmAdapter {
       const tx = await this.connection.getParsedTransaction(signature, {
         maxSupportedTransactionVersion: 0,
       });
-      
+
       if (!tx || !tx.meta) return null;
 
-      // Look for token balance changes indicating a buy
       const preBalances = tx.meta.preTokenBalances || [];
       const postBalances = tx.meta.postTokenBalances || [];
+      const WSOL_MINT = 'So11111111111111111111111111111111111111112';
 
-      // Find pool accounts and calculate changes
+      // Step 1: confirm wSOL (quote) increased in a pool vault → this is a buy
+      let buyAmount: BN | null = null;
+      let poolAddress: PublicKey | null = null;
+
       for (const pre of preBalances) {
-        const post = postBalances.find(
-          p => p.accountIndex === pre.accountIndex
-        );
+        if (pre.mint !== WSOL_MINT) continue;
+        const post = postBalances.find(p => p.accountIndex === pre.accountIndex);
         if (!post) continue;
 
-        const preAmount = new BN(pre.uiTokenAmount.amount);
-        const postAmount = new BN(post.uiTokenAmount.amount);
+        const preAmt = new BN(pre.uiTokenAmount.amount);
+        const postAmt = new BN(post.uiTokenAmount.amount);
 
-        // If quote token increased in pool, it's a buy
-        // (user sent quote, pool received it)
-        if (postAmount.gt(preAmount)) {
-          const buyAmount = postAmount.sub(preAmount);
-          
-          return {
-            pool: new PublicKey(pre.owner || ''),
-            protocol: AmmProtocol.RAYDIUM_V4,
-            tokenMint: new PublicKey(pre.mint),
-            buyAmount,
-            signature,
-            slot: tx.slot,
-            timestamp: tx.blockTime || 0,
-          };
+        if (postAmt.gt(preAmt)) {
+          buyAmount = postAmt.sub(preAmt);
+          // Resolve the pool PDA: scan account keys for an account owned by this program
+          const accountKeys: string[] = tx.transaction.message.accountKeys.map((k: any) =>
+            typeof k === 'string' ? k : k.pubkey.toBase58()
+          );
+          for (const keyStr of accountKeys) {
+            try {
+              const info = await this.connection.getAccountInfo(new PublicKey(keyStr));
+              if (info && info.owner.toBase58() === this.programId.toBase58() &&
+                  info.data.length === 752) { // Raydium V4 pool size
+                poolAddress = new PublicKey(keyStr);
+                break;
+              }
+            } catch {
+              // skip
+            }
+          }
+          break;
         }
       }
 
-      return null;
+      if (!buyAmount || !poolAddress) return null;
+
+      // Step 2: find the base token that DECREASED (sold by pool to buyer)
+      const soldToken = postBalances.find(post => {
+        const pre = preBalances.find(p => p.accountIndex === post.accountIndex);
+        if (!pre || post.mint === WSOL_MINT) return false;
+        return new BN(pre.uiTokenAmount.amount).gt(new BN(post.uiTokenAmount.amount));
+      });
+
+      if (!soldToken) return null;
+
+      return {
+        pool: poolAddress,
+        protocol: AmmProtocol.RAYDIUM_V4,
+        tokenMint: new PublicKey(soldToken.mint),
+        buyAmount,
+        signature,
+        slot: tx.slot,
+        timestamp: tx.blockTime || 0,
+      };
     } catch {
       return null;
     }
@@ -345,16 +371,27 @@ export class RaydiumCpmmAdapter extends BaseAmmAdapter {
   async findPools(tokenMint: PublicKey): Promise<PoolInfo[]> {
     const pools: PoolInfo[] = [];
 
-    // Search for pools containing this token
-    const accounts = await this.getProgramAccounts([
-      { dataSize: 637 }, // CPMM pool size
+    // Use memcmp filters to avoid fetching ALL CPMM accounts (can be thousands).
+    // token0Mint is at offset 168, token1Mint at offset 200 in the CPMM pool layout.
+    const [token0Accounts, token1Accounts] = await Promise.all([
+      this.getProgramAccounts([
+        { dataSize: 637 },
+        { memcmp: { offset: 168, bytes: tokenMint.toBase58() } },
+      ]),
+      this.getProgramAccounts([
+        { dataSize: 637 },
+        { memcmp: { offset: 200, bytes: tokenMint.toBase58() } },
+      ]),
     ]);
 
-    for (const { pubkey, data } of accounts) {
+    const seen = new Set<string>();
+    for (const { pubkey, data } of [...token0Accounts, ...token1Accounts]) {
+      const key = pubkey.toBase58();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
       const pool = await this.parseCpmmPool(pubkey, data);
-      if (pool && (pool.baseMint.equals(tokenMint) || pool.quoteMint.equals(tokenMint))) {
-        pools.push(pool);
-      }
+      if (pool) pools.push(pool);
     }
 
     return pools;

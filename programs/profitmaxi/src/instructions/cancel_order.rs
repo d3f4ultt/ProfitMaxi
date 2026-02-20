@@ -16,13 +16,17 @@ pub struct CancelOrder<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    /// The order being cancelled
+    /// The order being cancelled — closed on cancel, rent returned to owner
     #[account(
         mut,
+        close = owner,
         constraint = order.owner == owner.key() @ ProfitMaxiError::NotOrderOwner,
         constraint = order.status == OrderStatus::Active || order.status == OrderStatus::Paused @ ProfitMaxiError::OrderNotActive,
     )]
     pub order: Account<'info, Order>,
+
+    /// System program required for account closure
+    pub system_program: Program<'info, System>,
 
     /// Escrow token account
     #[account(
